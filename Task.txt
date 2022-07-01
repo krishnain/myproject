@@ -1,0 +1,2 @@
+1 Deploy nodejs on ec2 server on prod
+2 Deploy dzanngo on ec2 with ssl 

@@ -1,0 +1,249 @@
+Docker Stack
+=====================
+docker compose + docker swarm = docker stack
+docker compose + kubernetes = kompose
+
+Docker compose when implemented at the level of docker swarm
+it is called docker stack.Using docker stack we can create an orchestreta
+a micro services architecture at the level of production servers
+
+1 To create a stack from a compose file
+  docker stack deploy -c compose_filename stack_name
+
+2 To see the list of stacks created
+  docker stack ls
+
+3 To see on which nodes the stack services are running
+  docker stack ps stack_name
+
+4 To delete a stack
+  docker stack rm stack_name
+
+=====================================================================
+UseCase
+================
+Create a docker stack file to start 3 replicas of wordpress
+and one replica of mysql
+
+vim stack1.yml
+---
+version: '3.8'
+
+services:
+ db:
+  image: "mysql:5"
+  environment:
+   MYSQL_ROOT_PASSWORD: intelliqit
+
+ wordpress:
+  image: wordpress
+  ports:
+   - "8989:80"
+  deploy:
+   replicas: 3
+
+To start the stack file
+docker stack deploy -c stack1.yml mywordpress
+
+To see the services running
+docker service ls
+
+To check where the serives are running
+docker stack ps mywordpress
+
+To delete the stack
+docker stack rm mywordpress
+
+
+=====================================================================
+UseCase
+==============
+Create a stack file to setup CI-cd architecture where a jenkins
+container is linked with tomcats for qa and prod environments
+The jenkins contianers should run only on Manager
+the qaserver tomcat should run only on Worker1 and prodserver
+tomcat should run only on worker2
+
+vim stack2.yml
+---
+version: '3.8'
+
+services:
+ myjenkins:
+  image: jenkins/jenkins
+  ports:
+   - 5050:8080
+  deploy:
+   replicas: 2
+   placement:
+    constraints:
+     - node.hostname == Manager
+
+ qaserver:
+  image: tomcat
+  ports:
+   - 6060:8080
+  deploy:
+   replicas: 3
+   placement:
+    constraints:
+     - node.hostname == Worker1
+
+ prodserver:
+  image: tomcat
+  ports:
+   - 7070:8080
+  deploy:
+   replicas: 4
+   placement:
+    constraints:
+     - node.hostname == Worker2
+...
+
+To start the services 
+docker deploy -c stack2.yml ci-cd
+
+To check the replicas 
+docker stack ps ci-cd
+
+
+==============================================================================
+
+UseCase
+Create a stack file to setup the selenium hub and nodes architecture
+but also specify a upper limit on the h/w
+
+vim stack3.yml
+---
+version: '3.8'
+
+services:
+ hub:
+  image: selenium/hub
+  ports:
+   - 4444:4444
+  deploy:
+   replicas: 2
+   resources:
+    limits:
+     cpus: "0.1"
+     memory: "300M"
+
+ chrome:
+  image: selenium/node-chrome-debug
+  ports:
+   - 5901:5900
+  deploy:
+   replicas: 3
+   resources:
+    limits:
+     cpus: "0.01"
+     memory: "100M"
+
+ firefox:
+  image: selenium/node-firefox-debug
+  ports:
+   - 5902:5900
+  deploy:
+   replicas: 3
+   resources:
+    limits:
+     cpus: "0.01"
+     memory: "100M"
+
+
+===========================================================================
+Docker secrets
+===========================
+This is a feature of docker swarm using which we can pass secret data
+to the services running in swarm cluster
+These secrets are created on the host machine and they will be
+availbale from all the replicas in the swarm cluster
+
+1 Create a dcoker secret
+  echo " Hello Intelliqit" | docker secret create mysecret -
+
+2 Create a redis db with 5 replace and mount the secret
+  docker service create --name myredis --replicas 5 --secret mysecret redis
+
+3 Capture one of the replica contianer id
+  docker container ls
+
+4 Check if the secret data is available
+  docker exec -it container_id cat /run/secrets/mysecret
+
+
+==============================================================================
+Create a secret for mysql password and setup mysql wordpress architrcture
+
+Create a secret
+echo "Intelliqit" | docker secret create mysql -
+
+vim stack5.yml
+---
+version: '3.8'
+
+services:
+ db:
+  image: "mysql:5"
+  environment:
+   MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql
+  secrets:
+   - mysql:
+
+ wordpress:
+  image: wordpress
+  ports:
+   - "8989:80"
+  deploy:
+   replicas: 3
+
+secrets:
+ mysql:
+  external: true
+
+==============================================================================
+Create 3 secrets for postgres user,password and db
+and pass them to the stack file
+
+1 Create secrets
+  echo "intelliqit" | docker secret create pg_password -
+  echo "myuser" | docker secret create pg_user -
+  echo "mydb" | docker secret create pg_db -
+
+2 Check if the secrets are created
+  docker secret ls
+
+3 Create the docker stack file to work on these secrets
+  vim stack6.yml
+---
+version: '3.1'
+services:
+  db:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+      POSTGRES_USER_FILE: /run/secrets/pg_user
+      POSTGRES_DB_FILE: /run/secrets/pg_db
+    secrets:
+     - pg_password
+     - pg_user
+     - pg_db
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    deploy:
+     replicas: 2
+
+secrets:
+    pg_password:
+     external: true
+    pg_user:
+     external: true
+    pg_db:
+     external: true
+
+...
