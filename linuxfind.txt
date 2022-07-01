@@ -1,0 +1,14 @@
+find ./GFG -name sample.txt 
+
+find ./GFG -name *.txt 
+
+ find ./GFG -name sample.txt -exec rm -i {} \; 
+
+find ./GFG -empty
+
+find ./GFG -perm 664
+
+find ./ -type f -name "*.txt" -exec grep 'Geek'  {} \;
+
+apt-get update 
+
